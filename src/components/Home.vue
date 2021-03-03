@@ -1,12 +1,10 @@
 <script lang="ts">
 import { defineComponent, ref, computed } from "vue";
-import { Place } from "../models/Places";
+import { reject, concat, find } from "lodash";
 import Places from "./Places.vue";
 import Map from "./Map.vue";
-import { reject, concat, map, find } from "lodash";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-
-export type Maybe<T> = T | null | undefined;
+import { Place } from "../models";
+import { useLocalStorage } from "../hooks";
 
 export default defineComponent({
   name: "App",
@@ -14,7 +12,7 @@ export default defineComponent({
   setup() {
     const places = useLocalStorage<Place[]>("places", []);
     const selectedPlace = ref<Maybe<Place>>();
-    let prevSelectedPlace: Maybe<Place> = null;
+    let prevSelectedPlace: Maybe<Place>;
 
     const addPlace = (data: Omit<Place, "id">): void => {
       places.value = concat<Place>(places.value, new Place(data));
@@ -24,16 +22,6 @@ export default defineComponent({
       places.value = reject<Place>(places.value, { id: placeId });
     };
 
-    const editPlace = (placeId: string): void => {
-      places.value = map(places.value, place => {
-        if (place.id === placeId) {
-          place.address = "asdasd";
-        }
-
-        return place;
-      });
-    };
-
     const selectPlace = (placeId: Maybe<string>): void => {
       if (placeId) {
         prevSelectedPlace = selectedPlace.value;
@@ -41,7 +29,7 @@ export default defineComponent({
       } else selectedPlace.value = null;
     };
 
-    const mapCenter = computed(() => {
+    const mapCenter = computed<Coordinates>(() => {
       if (prevSelectedPlace && prevSelectedPlace === selectedPlace.value) {
         const { lng, lat } = selectedPlace.value?.coords;
         const veryLittleShift = 0.001;
@@ -59,7 +47,6 @@ export default defineComponent({
       places,
       addPlace,
       removePlace,
-      editPlace,
       selectPlace,
       selectedPlace,
       mapCenter
@@ -79,7 +66,6 @@ export default defineComponent({
     />
     <Places
       @selectPlace="selectPlace"
-      @editPlace="editPlace"
       @removePlace="removePlace"
       :selectedPlaceId="selectedPlace?.id"
       :places="places"

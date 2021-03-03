@@ -7,18 +7,15 @@ import {
   toRefs,
   PropType,
   watch,
-  onUnmounted,
-  inject
+  onUnmounted
 } from "vue";
+import _, { isNumber, isString } from "lodash";
 import env from "../environements";
-import { Place } from "@/models/Places";
-import { getAddress } from "../api/getAddress";
-import { Coordinates } from "../models/Places";
-import _ from "lodash";
-import { useGeolocation } from "../hooks/useGeolocation";
-import Loading from "./Loading.vue";
-
-export type Map = google.maps.Map<HTMLDivElement>;
+import Loading from "./common/Loading.vue";
+import { Place } from "@/models";
+import { getAddress } from "../helpers";
+import { useGeolocation } from "../hooks";
+import { required } from "../constants";
 
 export interface MarkerInfo {
   marker: google.maps.Marker;
@@ -29,19 +26,39 @@ export interface MarkersMap {
   [placeId: string]: MarkerInfo;
 }
 
+let googleMaps: typeof google.maps;
 export default defineComponent({
   name: "Map",
   components: { Loading },
-  emits: ["addPlace", "selectPlace", "removePlace"],
+  emits: {
+    removePlace: (id: string) => isString(id),
+    selectPlace: (id: string) => isString(id),
+    addPlace: ({
+      address,
+      coords: { lng, lat },
+      country,
+      flagEmoji
+    }: Pick<Place, "address" | "coords"> &
+      Pick<Partial<Place>, "country" | "flagEmoji">) => {
+      if (
+        (country && !isString(country)) ||
+        (flagEmoji && !isString(flagEmoji))
+      ) {
+        return false;
+      }
+
+      return [address].every(isString) && [lat, lng].every(isNumber);
+    }
+  },
   props: {
     places: {
       type: Array as PropType<Place[]>,
-      required: true,
-      default: (): Place[] => []
+      default: (): Place[] => [],
+      required
     },
     mapCenter: {
       type: Object as PropType<Coordinates>,
-      required: true
+      required
     },
     selectedPlaceId: String
   },
@@ -49,31 +66,33 @@ export default defineComponent({
     const { places, mapCenter, selectedPlaceId } = toRefs(props);
 
     const mapContainer = ref<HTMLDivElement>();
-    const map = ref<Map>();
-    let googleMaps: typeof google.maps;
+    const map = ref<google.maps.Map<HTMLDivElement>>();
     let clickListener: google.maps.MapsEventListener;
     let markers: MarkersMap;
 
-    watch<Place[]>(places, handlePlacesChange);
+    watch<Place[]>(places, handlePlacesCRUD);
     watch<Coordinates>(mapCenter, () => {
       handleMarkersFocus();
       map.value?.setCenter(mapCenter.value);
     });
 
     onMounted(async () => {
-      console.log(googleMaps);
-      googleMaps = (await new Loader(env.googleMapApiKey).load()).maps;
+      if (!googleMaps) {
+        googleMaps = (await new Loader(env.googleMapApiKey).load()).maps;
+      }
       map.value = await initMap(googleMaps);
       markers = placeMarkers(props.places);
     });
 
     onUnmounted(() => clickListener && clickListener.remove());
 
-    async function initMap(googleMaps: google["maps"]): Promise<Map> {
+    async function initMap(
+      googleMaps: google["maps"]
+    ): Promise<google.maps.Map<HTMLDivElement>> {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const map = new googleMaps.Map(mapContainer.value!, {
         center: await useGeolocation(),
-        zoom: 8
+        zoom: 6
       });
 
       clickListener = map.addListener("click", emitAddPlace);
@@ -128,16 +147,16 @@ export default defineComponent({
 
       if ((e.domEvent as MouseEvent)[metaKey]) {
         emit("addPlace", {
-          ...(await getAddress(e.latLng.toUrlValue())),
           coords: {
             lat: e.latLng.lat(),
             lng: e.latLng.lng()
-          }
+          },
+          ...(await getAddress(e.latLng.toUrlValue()))
         });
       }
     }
 
-    function handlePlacesChange(newPlaces: Place[], oldPlaces: Place[]): void {
+    function handlePlacesCRUD(newPlaces: Place[], oldPlaces: Place[]): void {
       const added = newPlaces.length > oldPlaces.length;
       const updated = newPlaces.length === oldPlaces.length;
 
@@ -150,17 +169,19 @@ export default defineComponent({
       } else if (updated) {
         for (const { id, address, flagEmoji } of newPlaces) {
           const { marker } = markers[id];
+          let shouldBreak = false;
 
-          if (
-            address !== marker.getTitle() ||
-            flagEmoji !== marker.getLabel()?.text
-          ) {
+          if (address !== marker.getTitle()) {
             marker.setTitle(address);
-            if (flagEmoji) {
-              marker.setLabel({ ...marker.getLabel(), text: flagEmoji });
-            }
-            break;
+            shouldBreak = true;
           }
+
+          if (flagEmoji && flagEmoji !== marker.getLabel()?.text) {
+            marker.setLabel({ ...marker.getLabel(), text: flagEmoji });
+            shouldBreak = true;
+          }
+
+          if (shouldBreak) break;
         }
       } else {
         const [removedPlaceId] = _.without(
@@ -177,14 +198,17 @@ export default defineComponent({
     }
 
     function handleMarkersFocus() {
-      if (mapCenter.value) {
-        _.each(markers, ({ marker }, placeId) => {
-          if (selectedPlaceId?.value === placeId) {
-            marker.setAnimation(googleMaps.Animation.BOUNCE);
-            setTimeout(() => marker.setAnimation(null), 3000);
-          } else marker.setAnimation(null);
-        });
-      } else _.each(markers, ({ marker }) => marker.setAnimation(null));
+      if (!mapCenter.value) {
+        _.each(markers, ({ marker }) => marker.setAnimation(null));
+        return;
+      }
+
+      _.each(markers, ({ marker }, placeId) => {
+        if (selectedPlaceId?.value === placeId) {
+          marker.setAnimation(googleMaps.Animation.BOUNCE);
+          setTimeout(() => marker.setAnimation(null), 3000);
+        } else marker.setAnimation(null);
+      });
     }
 
     return {

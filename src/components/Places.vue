@@ -1,3 +1,34 @@
+<script lang="ts">
+import { defineComponent, PropType, ref } from "vue";
+import { Place } from "@/models/Places";
+import { isString } from "lodash";
+import { required } from "../constants";
+
+interface Props {
+  places: Place[];
+}
+
+export default defineComponent({
+  name: "Places",
+  props: {
+    places: {
+      type: Array as PropType<Place[]>,
+      default: (): Place[] => [],
+      required
+    },
+    selectedPlaceId: String
+  },
+  emits: {
+    removePlace: (id: string) => id && isString(id),
+    selectPlace: (id: string) => id && isString(id)
+  },
+  setup() {
+    const shouldShowFlags = ref<boolean>(true);
+
+    return { shouldShowFlags };
+  }
+});
+</script>
 <template>
   <table
     style="max-height: 100vh; overflow: scroll"
@@ -52,32 +83,6 @@
     <h3 v-if="!places.length" class="text-center">Nothing to show!</h3>
   </table>
 </template>
-
-<script lang="ts">
-import { defineComponent, PropType, ref } from "vue";
-import { Place } from "@/models/Places";
-
-interface Props {
-  places: Place[];
-}
-
-export default defineComponent({
-  name: "Places",
-  props: {
-    places: {
-      type: Array as PropType<Place[]>,
-      default: (): Place[] => []
-    },
-    selectedPlaceId: String
-  },
-  emits: ["removePlace", "editPlace", "selectPlace"],
-  setup() {
-    const shouldShowFlags = ref<boolean>(true);
-
-    return { shouldShowFlags };
-  }
-});
-</script>
 
 <style scoped>
 .active {

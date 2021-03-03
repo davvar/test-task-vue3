@@ -1,5 +1,3 @@
-import { Coordinates } from "@/models/Places";
-
 export const useGeolocation = async (): Promise<Coordinates> => {
   const {
     coords: { latitude, longitude }

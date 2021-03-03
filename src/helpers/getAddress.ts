@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/camelcase */
 import axios from "axios";
-import { find, get } from "lodash";
+import { find } from "lodash";
 import countryFlagEmoji from "country-flag-emoji";
 
 import env from "../environements";
@@ -21,24 +22,19 @@ interface Response {
   }[];
 }
 
-export const getAddress = async (
-  latlng: string
-): Promise<{ address: string; flagEmoji?: string }> => {
+type AddressInfo = { address: string; flagEmoji?: string; country?: string };
+
+export const getAddress = async (latlng: string): Promise<AddressInfo> => {
   try {
     const { results } = await axios
       .get<Response>(getUrl(latlng))
       .then(res => res.data);
 
-    let res: any = {
-      address: get(results, "[0].formatted_address", "unknown address")
+    const res: AddressInfo = {
+      address: results[0].formatted_address
     };
 
-    const countryInfo = getCountryInfo(results);
-    if (countryInfo) {
-      res = { ...res, ...countryInfo };
-    }
-
-    return res;
+    return { ...res, ...getCountryNameAndFlag(results[0].address_components) };
   } catch (error) {
     console.log(error.message);
     return {
@@ -47,12 +43,10 @@ export const getAddress = async (
   }
 };
 
-function getCountryInfo(
-  results: Response["results"]
-): { flagEmoji: string; country: string } | void {
-  const res = find(results[0].address_components, ({ types }) =>
-    types.includes("country")
-  );
+function getCountryNameAndFlag(
+  addresses: AddressComponents[]
+): Omit<AddressInfo, "address"> {
+  const res = find(addresses, ({ types }) => types.includes("country"));
 
   if (res) {
     const { emoji, name } = countryFlagEmoji.get(res.short_name);
@@ -61,4 +55,6 @@ function getCountryInfo(
       country: name
     };
   }
+
+  return {};
 }
