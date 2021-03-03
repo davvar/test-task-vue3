@@ -10,9 +10,12 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
+    "noImplicitAny": false,
+    "strictPropertyInitialization": false,
     "baseUrl": ".",
     "types": [
-      "webpack-env"
+      "webpack-env",
+      "google.maps"
     ],
     "paths": {
       "@/*": [
@@ -35,5 +38,6 @@
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+
 }
